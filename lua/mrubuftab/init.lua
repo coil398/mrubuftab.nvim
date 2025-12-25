@@ -2,15 +2,15 @@ local M = {}
 
 M.mru_list = {}
 
--- 1. アイコン取得用の関数をあらかじめ定義しておく
-local get_icon = function(_, _) return "" end
+-- 1. アイコンと色情報(ハイライトグループ)を返す関数
+local get_icon_data = function(_, _) return "", "" end
 
 -- プラグインがあるか一度だけチェック
 local has_devicons, devicons = pcall(require, "nvim-web-devicons")
 if has_devicons then
-  get_icon = function(name, ext)
-    local icon, _ = devicons.get_icon(name, ext, { default = true })
-    return icon and (icon .. " ") or ""
+  get_icon_data = function(name, ext)
+    local icon, icon_hl = devicons.get_icon(name, ext, { default = true })
+    return icon or "", icon_hl or ""
   end
 end
 
@@ -42,23 +42,43 @@ function M.render()
     if name == "" then name = "[No Name]" end
 
     -- 2. アイコン・未保存マークの取得
-    local icon = get_icon(name, ext)
+    local icon_char, icon_hl = get_icon_data(name, ext)
     local modified = vim.bo[bufnr].modified and " ●" or ""
 
     -- 3. ハイライトと装飾の設定
-    -- bufferline風にするため、選択中だけ左端にアクセント(▎)をつける
+    local hl_group = (bufnr == cur) and "%#TabLineSel#" or "%#TabLine#"
+    
+    -- ベースの色を設定
+    s = s .. hl_group
+    
     if bufnr == cur then
-      s = s .. "%#TabLineSel#" .. "▎ "  -- 左端の太線 + 余白
-      s = s .. icon .. i .. " " .. name .. modified -- 番号と名前の間も少し空ける
-      s = s .. " " -- 右側の余白
+      s = s .. "▎ " -- 左端のアクセント
     else
-      s = s .. "%#TabLine#" .. "  "   -- 非選択時は太線なしで余白のみ
-      s = s .. icon .. i .. " " .. name .. modified
-      s = s .. " "
+      s = s .. "  " -- 非選択時の余白
+    end
+
+    -- 1. 番号
+    s = s .. i .. " "
+
+    -- 2. アイコン (色付き)
+    if icon_char ~= "" then
+      if icon_hl ~= "" then
+        s = s .. "%#" .. icon_hl .. "#" .. icon_char .. " " .. hl_group
+      else
+        s = s .. icon_char .. " "
+      end
+    end
+
+    -- 3. ファイル名 (選択中は斜体)
+    local name_hl = hl_group
+    if bufnr == cur then
+       name_hl = "%#TabLineSelItalic#"
     end
     
-    -- 従来の "|" セパレーターは削除し、背景色で区切る
-    s = s .. "%#TabLineFill#" -- タブの右端をリセット
+    s = s .. name_hl .. name .. hl_group .. modified .. " "
+    
+    -- 背景色リセット
+    s = s .. "%#TabLineFill#"
   end
 
   s = s .. "%#TabLineFill#"
@@ -93,6 +113,29 @@ function M.prev(count)
 end
 
 function M.setup(opts)
+  -- ハイライトを設定する関数
+  local function set_highlights()
+    local function create_italic_hl(target, source)
+      -- 既存の色情報を取得 (リンク先も解決する)
+      local hl = vim.api.nvim_get_hl(0, { name = source, link = false })
+      -- 斜体を追加
+      hl.italic = true
+      -- 新しいグループとして定義
+      vim.api.nvim_set_hl(0, target, hl)
+    end
+
+    create_italic_hl("TabLineSelItalic", "TabLineSel")
+    create_italic_hl("TabLineItalic", "TabLine")
+  end
+
+  -- 初回実行
+  set_highlights()
+
+  -- カラースキームが変更されたら再設定する (色がリセットされるのを防ぐ)
+  vim.api.nvim_create_autocmd("ColorScheme", {
+    callback = set_highlights,
+  })
+
   vim.api.nvim_create_autocmd({ "BufEnter", "BufWinEnter" }, {
     group = vim.api.nvim_create_augroup("MruTabline", { clear = true }),
     callback = function()
