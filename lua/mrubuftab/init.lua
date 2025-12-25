@@ -41,22 +41,24 @@ function M.render()
     local ext = vim.fn.fnamemodify(filename, ":e")
     if name == "" then name = "[No Name]" end
 
-    -- 2. アイコン・未保存マークの取得 (定義済みの関数を呼ぶだけなので高速)
+    -- 2. アイコン・未保存マークの取得
     local icon = get_icon(name, ext)
     local modified = vim.bo[bufnr].modified and " ●" or ""
 
-    -- 3. ハイライトの設定
+    -- 3. ハイライトと装飾の設定
+    -- bufferline風にするため、選択中だけ左端にアクセント(▎)をつける
     if bufnr == cur then
-      s = s .. "%#TabLineSel#"
+      s = s .. "%#TabLineSel#" .. "▎ "  -- 左端の太線 + 余白
+      s = s .. icon .. i .. " " .. name .. modified -- 番号と名前の間も少し空ける
+      s = s .. " " -- 右側の余白
     else
-      s = s .. "%#TabLine#"
+      s = s .. "%#TabLine#" .. "  "   -- 非選択時は太線なしで余白のみ
+      s = s .. icon .. i .. " " .. name .. modified
+      s = s .. " "
     end
-
-    -- 表示の組み立て (例:   1:init.lua ● )
-    s = s .. " " .. icon .. i .. ":" .. name .. modified .. " "
     
-    -- バッファ間の区切り線
-    s = s .. "%#TabLine#|"
+    -- 従来の "|" セパレーターは削除し、背景色で区切る
+    s = s .. "%#TabLineFill#" -- タブの右端をリセット
   end
 
   s = s .. "%#TabLineFill#"
