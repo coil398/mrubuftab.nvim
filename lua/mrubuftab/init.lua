@@ -52,20 +52,20 @@ function M.render()
     s = s .. hl_group
     
     if bufnr == cur then
-      s = s .. "▎ " -- 左端のアクセント
+      s = s .. "▎  " -- 左端のアクセント + 多めの余白
     else
-      s = s .. "  " -- 非選択時の余白
+      s = s .. "   " -- 非選択時も位置を合わせるためにスペースを増やす
     end
 
     -- 1. 番号
-    s = s .. i .. " "
+    s = s .. i .. "  " -- 番号の後ろも少し空ける
 
     -- 2. アイコン (色付き)
     if icon_char ~= "" then
       if icon_hl ~= "" then
-        s = s .. "%#" .. icon_hl .. "#" .. icon_char .. " " .. hl_group
+        s = s .. "%#" .. icon_hl .. "#" .. icon_char .. "  " .. hl_group -- アイコンの後ろも2マス
       else
-        s = s .. icon_char .. " "
+        s = s .. icon_char .. "  "
       end
     end
 
@@ -75,7 +75,7 @@ function M.render()
        name_hl = "%#TabLineSelItalic#"
     end
     
-    s = s .. name_hl .. name .. hl_group .. modified .. " "
+    s = s .. name_hl .. name .. hl_group .. modified .. "  " -- 右側の余白も増やす
     
     -- 背景色リセット
     s = s .. "%#TabLineFill#"
