@@ -58,9 +58,10 @@ local function to_superscript(num)
 end
 
 function M.render()
-  local s = ""
+  local columns = vim.o.columns
   local cur = vim.api.nvim_get_current_buf()
 
+  -- 1. 有効なバッファリストの作成と更新
   local valid_mru = {}
   for _, bufnr in ipairs(M.mru_list) do
     if vim.api.nvim_buf_is_valid(bufnr) and vim.bo[bufnr].buflisted then
@@ -69,117 +70,158 @@ function M.render()
   end
   M.mru_list = valid_mru
 
+  -- 2. 各タブの描画内容と幅を計算してリスト化
+  local tabs = {}
+  local total_req_width = 0
+  local current_idx = 1
+
+  -- --- 設定値 ---
+  local TAB_BASE_WIDTH = 25 -- 基本幅
+  local TAB_MAX_WIDTH = 40  -- 最大幅
+  -- --------------
+
   for i, bufnr in ipairs(M.mru_list) do
+    if bufnr == cur then current_idx = i end
+
     local filename = vim.api.nvim_buf_get_name(bufnr)
     local name = vim.fn.fnamemodify(filename, ":t")
     local ext = vim.fn.fnamemodify(filename, ":e")
     if name == "" then name = "[No Name]" end
 
-    -- 2. アイコン・未保存マークの取得
+    -- アイコン・未保存マーク
     local icon_char, icon_hl = get_icon_data(name, ext)
     local modified = vim.bo[bufnr].modified and " ●" or ""
-
-    -- 3. ハイライトと装飾の設定
+    
+    -- ハイライト
     local hl_group = (bufnr == cur) and "%#TabLineSel#" or "%#TabLine#"
+    local name_hl = (bufnr == cur) and "%#TabLineSelItalic#" or hl_group
 
-    -- ベースの色を設定
-    s = s .. hl_group
+    -- 番号 (上付き文字)
+    local num_str = to_superscript(i)
 
-    if bufnr == cur then
-      s = s .. "▎  " -- 左端のアクセント + 多めの余白
-    else
-      s = s .. "   " -- 非選択時も位置を合わせるためにスペースを増やす
+    -- コンテンツ幅の計算 (スペースやアイコン含む)
+    -- "▎ " or "  " (2) + num (var) + " " (1) + icon (var) + " " (1) = base
+    local prefix_width = 2 + vim.fn.strdisplaywidth(num_str) + 1 + (icon_char ~= "" and 2 or 0)
+    
+    local diag_str = get_diagnostics(bufnr)
+    local current_diag_width = vim.fn.strdisplaywidth(diag_str:gsub("%%#.-#", ""))
+    local close_width = 3 -- "✕  "
+    local modified_width = (modified ~= "" and 2 or 0)
+
+    -- 目標幅の決定
+    local target_width = TAB_BASE_WIDTH
+    if current_diag_width > 0 then
+      target_width = math.min(TAB_BASE_WIDTH + current_diag_width, TAB_MAX_WIDTH)
     end
 
-    -- 1. 番号 (上付き文字)
-    local num_str = to_superscript(i)
-    s = s .. num_str .. " " -- 2マスから1マスに縮小
+    -- ファイル名表示幅
+    local available_name_width = target_width - prefix_width - close_width - current_diag_width - modified_width
+    if available_name_width < 5 then available_name_width = 5 end
 
-    -- 2. アイコン (色付き)
+    local display_name = name
+    if vim.fn.strdisplaywidth(name) > available_name_width then
+      display_name = vim.fn.strcharpart(name, 0, available_name_width - 1) .. "…"
+    end
+    local actual_name_width = vim.fn.strdisplaywidth(display_name)
+
+    -- パディング計算
+    local used_width = prefix_width + actual_name_width + modified_width + current_diag_width + close_width
+    local padding_total = target_width - used_width
+    if padding_total < 0 then padding_total = 0 end
+
+    local padding_left_len = math.floor(padding_total * 0.6)
+    local padding_right_len = padding_total - padding_left_len
+    local padding_left = string.rep(" ", padding_left_len)
+    local padding_right = string.rep(" ", padding_right_len)
+
+    -- 文字列構築
+    local s = ""
+    s = s .. hl_group
+    s = s .. "  " -- 装飾文字 ▎ を削除し、スペースに変更
+    s = s .. num_str .. " "
+
     if icon_char ~= "" then
       if icon_hl ~= "" then
-        s = s .. "%#" .. icon_hl .. "#" .. icon_char .. " " .. hl_group -- 2マスから1マスに縮小
+        s = s .. "%#" .. icon_hl .. "#" .. icon_char .. " " .. hl_group
       else
         s = s .. icon_char .. " "
       end
     end
 
-    -- 3. ファイル名 (選択中は斜体)
-    local name_hl = hl_group
-    if bufnr == cur then
-      name_hl = "%#TabLineSelItalic#"
-    end
-
-    -- --- 可変・固定幅ロジック ---
-    local TAB_BASE_WIDTH = 25 -- 基本幅
-    local TAB_MAX_WIDTH = 40  -- 最大幅
-
-    -- 既に表示した部分の幅 (左端スペース + 番号 + スペース + アイコン + スペース)
-    -- スペースを減らした分、計算も修正 (+2 -> +1)
-    local current_width = 2 + vim.fn.strdisplaywidth(num_str) + 1 + (icon_char ~= "" and 2 or 0)
-    
-        -- LSPの幅を取得
-        local diag_str = get_diagnostics(bufnr)
-        local current_diag_width = vim.fn.strdisplaywidth(diag_str:gsub("%%#.-#", ""))
-    
-        -- 閉じるボタン等
-        local close_width = 3 -- "✕  "
-        local modified_width = (modified ~= "" and 2 or 0)
-    
-        -- 目標とするタブ幅
-        -- LSPがある場合は基本幅に加算するが、最大幅を超えないようにする
-        local target_width = TAB_BASE_WIDTH
-        if current_diag_width > 0 then
-          target_width = math.min(TAB_BASE_WIDTH + current_diag_width, TAB_MAX_WIDTH)
-        end
-    
-        -- ファイル名に使える幅
-        -- target_width から 固定要素 と LSP幅, modified幅 を引く
-        local available_name_width = target_width - current_width - close_width - current_diag_width - modified_width
-    
-        -- 最低でも5文字分はファイル名に残す
-        if available_name_width < 5 then available_name_width = 5 end
-    
-        -- ファイル名の切り詰め処理
-        local display_name = name
-        if vim.fn.strdisplaywidth(name) > available_name_width then
-          display_name = vim.fn.strcharpart(name, 0, available_name_width - 1) .. "…"
-        end
-    
-        -- 実際に表示するファイル名の幅
-        local actual_name_width = vim.fn.strdisplaywidth(display_name)
-    
-        -- 余白の計算 (目標幅 - 実際の構成要素幅)
-        -- ここで実際に消費される幅を再計算して、足りない分をパディングとする
-        local used_width = current_width + actual_name_width + modified_width + current_diag_width + close_width
-        local padding_total = target_width - used_width
-        if padding_total < 0 then padding_total = 0 end
-    
-        -- パディングの振り分け (真ん中より少し右 -> 左パディングを多めに)
-        local padding_left_len = math.floor(padding_total * 0.6)
-        local padding_right_len = padding_total - padding_left_len
-    
-        local padding_left = string.rep(" ", padding_left_len)
-        local padding_right = string.rep(" ", padding_right_len)
-    
-        -- 組み立て
-        -- 左パディング -> ファイル名 -> 右パディング -> modified -> LSP -> close
-        s = s .. name_hl .. padding_left .. display_name .. hl_group .. modified .. padding_right .. " "
-    
-        if diag_str ~= "" then
-          s = s .. diag_str .. " "
-        end
-    -- 5. 閉じるボタン
+    s = s .. name_hl .. padding_left .. display_name .. hl_group .. modified .. padding_right .. " "
+    if diag_str ~= "" then s = s .. diag_str .. " " end
     s = s .. "%" .. bufnr .. "@v:lua.MruBufTab_close_buffer@✕%X  "
-
-    -- 背景色リセット
     s = s .. "%#TabLineFill#"
+
+    -- リストに追加
+    table.insert(tabs, {
+      str = s,
+      width = target_width -- パディングで埋めているのでtarget_widthが実際の幅になるはず（ただし計算違いで多少ずれる可能性はあるが一旦これで）
+    })
+    total_req_width = total_req_width + target_width
   end
 
-  s = s .. "%#TabLineFill#"
-  return s
-end
+  -- 3. 表示範囲の計算
+  -- 安全マージンを含めて少し広めに取る
+  local INDICATOR_WIDTH = 6 -- "  " or "  " + margin
+  local available_width = columns - (INDICATOR_WIDTH * 2)
 
+  local left, right
+  local is_scroll_needed = false
+
+  if (total_req_width + (INDICATOR_WIDTH * 2)) <= columns then
+    -- 全て収まる場合
+    left = 1
+    right = #tabs
+    is_scroll_needed = false
+  else
+    -- 収まらない場合: スクロール計算
+    is_scroll_needed = true
+    left = current_idx
+    right = current_idx
+    local current_len = tabs[current_idx].width
+
+    -- 中心から広げていく (available_widthに収まるように)
+    while true do
+      local changed = false
+      -- 左へ
+      if left > 1 and (current_len + tabs[left-1].width) <= available_width then
+        left = left - 1
+        current_len = current_len + tabs[left].width
+        changed = true
+      end
+      -- 右へ
+      if right < #tabs and (current_len + tabs[right+1].width) <= available_width then
+        right = right + 1
+        current_len = current_len + tabs[right].width
+        changed = true
+      end
+      
+      if not changed then break end
+      if current_len >= available_width then break end
+    end
+  end
+
+  -- 4. 結合
+  local final_s = ""
+  
+  -- 左インジケータ (常に表示)
+  final_s = final_s .. "%#TabLine#  "
+
+  for i = left, right do
+    final_s = final_s .. tabs[i].str
+  end
+
+  -- 余白を埋める (スクロールが必要な場合のみ右端固定)
+  if is_scroll_needed then
+    final_s = final_s .. "%="
+  end
+
+  -- 右インジケータ (常に表示)
+  final_s = final_s .. "%#TabLine#  "
+
+  return final_s .. "%#TabLineFill#"
+end
 function M.jump(count)
   local target_idx = (count and count > 0) and count or 2
   local target_buf = M.mru_list[target_idx]
