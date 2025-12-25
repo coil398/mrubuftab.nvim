@@ -49,6 +49,14 @@ local function remove_value(list, value)
   end
 end
 
+local function to_superscript(num)
+  local supers = {
+    ["0"] = "⁰", ["1"] = "¹", ["2"] = "²", ["3"] = "³", ["4"] = "⁴",
+    ["5"] = "⁵", ["6"] = "⁶", ["7"] = "⁷", ["8"] = "⁸", ["9"] = "⁹"
+  }
+  return tostring(num):gsub(".", supers)
+end
+
 function M.render()
   local s = ""
   local cur = vim.api.nvim_get_current_buf()
@@ -83,15 +91,16 @@ function M.render()
       s = s .. "   " -- 非選択時も位置を合わせるためにスペースを増やす
     end
 
-    -- 1. 番号
-    s = s .. i .. "  " -- 番号の後ろも少し空ける
+    -- 1. 番号 (上付き文字)
+    local num_str = to_superscript(i)
+    s = s .. num_str .. " " -- 2マスから1マスに縮小
 
     -- 2. アイコン (色付き)
     if icon_char ~= "" then
       if icon_hl ~= "" then
-        s = s .. "%#" .. icon_hl .. "#" .. icon_char .. "  " .. hl_group -- アイコンの後ろも2マス
+        s = s .. "%#" .. icon_hl .. "#" .. icon_char .. " " .. hl_group -- 2マスから1マスに縮小
       else
-        s = s .. icon_char .. "  "
+        s = s .. icon_char .. " "
       end
     end
 
@@ -101,12 +110,13 @@ function M.render()
       name_hl = "%#TabLineSelItalic#"
     end
 
-        -- --- 可変・固定幅ロジック ---
-        local TAB_BASE_WIDTH = 25 -- 基本幅
-        local TAB_MAX_WIDTH = 40  -- 最大幅
-    
-        -- 既に表示した部分の幅 (左端スペース + 番号 + スペース + アイコン + スペース)
-        local current_width = 2 + string.len(tostring(i)) + 2 + (icon_char ~= "" and 2 or 0)
+    -- --- 可変・固定幅ロジック ---
+    local TAB_BASE_WIDTH = 25 -- 基本幅
+    local TAB_MAX_WIDTH = 40  -- 最大幅
+
+    -- 既に表示した部分の幅 (左端スペース + 番号 + スペース + アイコン + スペース)
+    -- スペースを減らした分、計算も修正 (+2 -> +1)
+    local current_width = 2 + vim.fn.strdisplaywidth(num_str) + 1 + (icon_char ~= "" and 2 or 0)
     
         -- LSPの幅を取得
         local diag_str = get_diagnostics(bufnr)
