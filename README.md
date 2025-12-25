@@ -1,38 +1,83 @@
 # mrubuftab.nvim
 
-最近使ったファイル順 (MRU: Most Recently Used) にバッファを並べ替えてタブラインに表示する Neovim プラグインです。
-直前のバッファに戻ったり、履歴のN番目にジャンプする機能も提供します。
+A simple, lightweight, and MRU (Most Recently Used) based buffer tabline plugin for Neovim.
 
-## インストール (lazy.nvim)
+![Demo](https://via.placeholder.com/800x100?text=MRU+BufTab+Demo+Placeholder)
 
-`lazy.nvim` を使用している場合の推奨設定です。
+## Features
+
+- **MRU Ordering**: Automatically sorts tabs based on your usage history. The active buffer is always highlighted, and recent buffers are easily accessible.
+- **Dynamic Sizing**: Tab width automatically adjusts to show relevant information (filename, icons, status) without wasting space.
+- **LSP Integration**: Displays LSP diagnostic counts (Errors, Warnings) with icons directly on the tab. The tab expands to show this information only when needed.
+- **Smart Scrolling**:
+    - Always shows `` and `` indicators.
+    - When tabs overflow the screen, the right indicator sticks to the right edge for a consistent UI.
+- **Visuals**:
+    - Uses `nvim-web-devicons` for file icons.
+    - Superscript buffer numbers (e.g., `¹`, `²`) for a cleaner look.
+    - Minimalist design (no unnecessary separators or active buffer bars).
+- **Lightweight**: Written in pure Lua.
+
+## Requirements
+
+- Neovim >= 0.7.0
+- [nvim-tree/nvim-web-devicons](https://github.com/nvim-tree/nvim-web-devicons) (Recommended for icons)
+
+## Installation
+
+### [lazy.nvim](https://github.com/folke/lazy.nvim)
 
 ```lua
 {
   "coil398/mrubuftab.nvim",
+  dependencies = { "nvim-tree/nvim-web-devicons" },
   config = function()
     require("mrubuftab").setup()
-
-    -- キーマッピングの設定例
-    -- <S-l>: 直前のバッファ（履歴の2番目）へ移動。 3<S-l> で3番目の履歴へ移動。
-    vim.keymap.set("n", "<S-l>", "<Cmd>MruNext<CR>", { desc = "MRU Next" })
-    
-    -- <S-h>: 一番古いバッファ（履歴の末尾）へ移動。
-    vim.keymap.set("n", "<S-h>", "<Cmd>MruPrev<CR>", { desc = "MRU Prev" })
   end,
 }
 ```
 
-## 使い方
+### [packer.nvim](https://github.com/wbthomason/packer.nvim)
 
-プラグインをインストールすると、自動的にタブラインがMRU順の表示に切り替わります。
-左端（番号1）が現在開いているファイル、その右（番号2）が直前に開いていたファイル...という順番になります。
+```lua
+use {
+  "coil398/mrubuftab.nvim",
+  requires = { "nvim-tree/nvim-web-devicons" },
+  config = function()
+    require("mrubuftab").setup()
+  end
+}
+```
 
-### コマンド
+## Configuration
 
-- `:MruNext`
-    - 引数なし: 履歴の2番目（直前のバッファ）に移動します。
-    - 引数あり (`:3MruNext`): 履歴の指定した番号（例: 3番目）に移動します。
-- `:MruPrev`
-    - 引数なし: 履歴の一番最後（最も昔に触ったバッファ）に移動します。
-    - 引数あり (`:2MruPrev`): 後ろから指定した番号（例: 後ろから2番目）に移動します。
+`mrubuftab.nvim` works out of the box with minimal configuration. Pass an empty table to setup to use defaults.
+
+```lua
+require("mrubuftab").setup({
+  -- Currently no options are exposed, but the setup call is required to initialize highlights and autocmds.
+})
+```
+
+## Keymaps
+
+The plugin exposes user commands `:MruNext` and `:MruPrev` to cycle through the MRU list.
+
+```lua
+-- Cycle through buffers in MRU order
+vim.keymap.set("n", "<Tab>", "<cmd>MruNext<CR>", { silent = true })
+vim.keymap.set("n", "<S-Tab>", "<cmd>MruPrev<CR>", { silent = true })
+```
+
+## Highlights
+
+The plugin uses the following highlight groups, which link to standard TabLine groups by default. You can override them in your colorscheme.
+
+- `TabLine`: Background for unselected tabs.
+- `TabLineSel`: Background for the selected tab.
+- `TabLineFill`: Background for the empty space in the tabline.
+- `TabLineSelItalic`: Used for the selected filename (italicized).
+
+## License
+
+MIT
