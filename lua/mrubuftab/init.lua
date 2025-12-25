@@ -2,6 +2,18 @@ local M = {}
 
 M.mru_list = {}
 
+-- 1. アイコン取得用の関数をあらかじめ定義しておく
+local get_icon = function(_, _) return "" end
+
+-- プラグインがあるか一度だけチェック
+local has_devicons, devicons = pcall(require, "nvim-web-devicons")
+if has_devicons then
+  get_icon = function(name, ext)
+    local icon, _ = devicons.get_icon(name, ext, { default = true })
+    return icon and (icon .. " ") or ""
+  end
+end
+
 local function remove_value(list, value)
   for i, v in ipairs(list) do
     if v == value then
@@ -24,16 +36,29 @@ function M.render()
   M.mru_list = valid_mru
 
   for i, bufnr in ipairs(M.mru_list) do
-    local name = vim.fn.fnamemodify(vim.api.nvim_buf_get_name(bufnr), ":t")
+    local filename = vim.api.nvim_buf_get_name(bufnr)
+    local name = vim.fn.fnamemodify(filename, ":t")
+    local ext = vim.fn.fnamemodify(filename, ":e")
     if name == "" then name = "[No Name]" end
-    
+
+    -- 2. アイコン・未保存マークの取得 (定義済みの関数を呼ぶだけなので高速)
+    local icon = get_icon(name, ext)
+    local modified = vim.bo[bufnr].modified and " ●" or ""
+
+    -- 3. ハイライトの設定
     if bufnr == cur then
       s = s .. "%#TabLineSel#"
     else
       s = s .. "%#TabLine#"
     end
-    s = s .. " " .. i .. ":" .. name .. " "
+
+    -- 表示の組み立て (例:   1:init.lua ● )
+    s = s .. " " .. icon .. i .. ":" .. name .. modified .. " "
+    
+    -- バッファ間の区切り線
+    s = s .. "%#TabLine#|"
   end
+
   s = s .. "%#TabLineFill#"
   return s
 end
