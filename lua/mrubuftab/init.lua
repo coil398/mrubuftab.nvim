@@ -34,8 +34,8 @@ local function get_diagnostics(bufnr)
   local warn = #vim.diagnostic.get(bufnr, { severity = vim.diagnostic.severity.WARN })
 
   local s = ""
-  if err > 0 then s = s .. "%#DiagnosticError#E:" .. err .. " " end
-  if warn > 0 then s = s .. "%#DiagnosticWarn#W:" .. warn .. " " end
+  if err > 0 then s = s .. "%#DiagnosticError# " .. err .. " " end
+  if warn > 0 then s = s .. "%#DiagnosticWarn# " .. warn .. " " end
 
   return s
 end
@@ -101,59 +101,64 @@ function M.render()
       name_hl = "%#TabLineSelItalic#"
     end
 
-    -- --- 厳密な固定幅ロジック ---
-    local TAB_WIDTH = 25 -- 1つのタブの目標固定幅 (文字数)
-
-    -- 既に表示した部分の幅 (左端スペース + 番号 + スペース + アイコン + スペース)
-    local current_width = 2 + string.len(tostring(i)) + 2 + (icon_char ~= "" and 2 or 0)
-
-    -- 右側の固定要素の幅 (LSP + 閉じるボタン + スペース)
-    local diag_str = get_diagnostics(bufnr)
-
-    -- LSPエリアを固定幅で予約する (例: 6文字分)
-    -- E:1 W:1 でおよそ6-7文字。これを超える場合は溢れるが、基本は確保
-    local RESERVED_DIAG_WIDTH = 6
-    local current_diag_width = vim.fn.strdisplaywidth(diag_str:gsub("%%#.-#", "")) 
-
-    -- 実際にLSPを表示する際のパディング
-    local diag_padding = ""
-    if current_diag_width < RESERVED_DIAG_WIDTH then
-      diag_padding = string.rep(" ", RESERVED_DIAG_WIDTH - current_diag_width)
-    end
-
-    local close_width = 3 -- "✕  "
-    local modified_width = (modified ~= "" and 2 or 0)
-
-    -- ファイル名に使える残りの幅 (LSPエリアは常に RESERVED_DIAG_WIDTH 分引く)
-    local available_name_width = TAB_WIDTH - current_width - RESERVED_DIAG_WIDTH - close_width - modified_width
-
-    -- 最低でも5文字分はファイル名に残す
-    if available_name_width < 5 then available_name_width = 5 end
-
-    -- ファイル名の切り詰め処理
-    local display_name = name
-    if vim.fn.strdisplaywidth(name) > available_name_width then
-      display_name = vim.fn.strcharpart(name, 0, available_name_width - 1) .. "…"
-    end
-
-    -- 実際に表示するファイル名の幅
-    local actual_name_width = vim.fn.strdisplaywidth(display_name)
-
-    -- 足りない分をパディング（空白）で埋める
-    local padding_len = available_name_width - actual_name_width
-    local padding = string.rep(" ", padding_len > 0 and padding_len or 0)
-
-    -- 組み立て
-    s = s .. name_hl .. display_name .. hl_group .. modified .. padding .. " "
-
-    -- LSP情報の表示 (予約幅に合わせてパディング追加)
-    if diag_str ~= "" then
-      s = s .. diag_str .. hl_group .. diag_padding .. " "
-    else
-      -- 情報がない場合も、予約した幅の分だけスペースを埋める
-      s = s .. string.rep(" ", RESERVED_DIAG_WIDTH) .. " "
-    end
-
+        -- --- 可変・固定幅ロジック ---
+        local TAB_BASE_WIDTH = 25 -- 基本幅
+        local TAB_MAX_WIDTH = 40  -- 最大幅
+    
+        -- 既に表示した部分の幅 (左端スペース + 番号 + スペース + アイコン + スペース)
+        local current_width = 2 + string.len(tostring(i)) + 2 + (icon_char ~= "" and 2 or 0)
+    
+        -- LSPの幅を取得
+        local diag_str = get_diagnostics(bufnr)
+        local current_diag_width = vim.fn.strdisplaywidth(diag_str:gsub("%%#.-#", ""))
+    
+        -- 閉じるボタン等
+        local close_width = 3 -- "✕  "
+        local modified_width = (modified ~= "" and 2 or 0)
+    
+        -- 目標とするタブ幅
+        -- LSPがある場合は基本幅に加算するが、最大幅を超えないようにする
+        local target_width = TAB_BASE_WIDTH
+        if current_diag_width > 0 then
+          target_width = math.min(TAB_BASE_WIDTH + current_diag_width, TAB_MAX_WIDTH)
+        end
+    
+        -- ファイル名に使える幅
+        -- target_width から 固定要素 と LSP幅, modified幅 を引く
+        local available_name_width = target_width - current_width - close_width - current_diag_width - modified_width
+    
+        -- 最低でも5文字分はファイル名に残す
+        if available_name_width < 5 then available_name_width = 5 end
+    
+        -- ファイル名の切り詰め処理
+        local display_name = name
+        if vim.fn.strdisplaywidth(name) > available_name_width then
+          display_name = vim.fn.strcharpart(name, 0, available_name_width - 1) .. "…"
+        end
+    
+        -- 実際に表示するファイル名の幅
+        local actual_name_width = vim.fn.strdisplaywidth(display_name)
+    
+        -- 余白の計算 (目標幅 - 実際の構成要素幅)
+        -- ここで実際に消費される幅を再計算して、足りない分をパディングとする
+        local used_width = current_width + actual_name_width + modified_width + current_diag_width + close_width
+        local padding_total = target_width - used_width
+        if padding_total < 0 then padding_total = 0 end
+    
+        -- パディングの振り分け (真ん中より少し右 -> 左パディングを多めに)
+        local padding_left_len = math.floor(padding_total * 0.6)
+        local padding_right_len = padding_total - padding_left_len
+    
+        local padding_left = string.rep(" ", padding_left_len)
+        local padding_right = string.rep(" ", padding_right_len)
+    
+        -- 組み立て
+        -- 左パディング -> ファイル名 -> 右パディング -> modified -> LSP -> close
+        s = s .. name_hl .. padding_left .. display_name .. hl_group .. modified .. padding_right .. " "
+    
+        if diag_str ~= "" then
+          s = s .. diag_str .. " "
+        end
     -- 5. 閉じるボタン
     s = s .. "%" .. bufnr .. "@v:lua.MruBufTab_close_buffer@✕%X  "
 
