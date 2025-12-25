@@ -2,6 +2,15 @@ local M = {}
 
 M.mru_list = {}
 
+-- グローバル関数として登録しないとタブラインから呼べない (v:lua.Func)
+_G.MruBufTab_close_buffer = function(bufnr)
+  -- 数値に変換 (タブラインからは文字列で来る場合があるため)
+  local b = tonumber(bufnr)
+  if b and vim.api.nvim_buf_is_valid(b) then
+    vim.api.nvim_buf_delete(b, { force = false })
+  end
+end
+
 -- 1. アイコンと色情報(ハイライトグループ)を返す関数
 local get_icon_data = function(_, _) return "", "" end
 
@@ -70,15 +79,20 @@ function M.render()
     end
 
     -- 3. ファイル名 (選択中は斜体)
-    local name_hl = hl_group
-    if bufnr == cur then
-       name_hl = "%#TabLineSelItalic#"
-    end
+        local name_hl = hl_group
+        if bufnr == cur then
+           name_hl = "%#TabLineSelItalic#"
+        end
+        
+        s = s .. name_hl .. name .. hl_group .. modified .. " "
     
-    s = s .. name_hl .. name .. hl_group .. modified .. "  " -- 右側の余白も増やす
+        -- 4. 閉じるボタン (クリック可能)
+        -- %@Func@...%X で囲むとその範囲をクリックした時に Func が呼ばれる
+        -- 少し小さめの ✕ (U+2715) を使用
+        s = s .. "%" .. bufnr .. "@v:lua.MruBufTab_close_buffer@✕%X "
     
-    -- 背景色リセット
-    s = s .. "%#TabLineFill#"
+        -- 背景色リセット
+        s = s .. "%#TabLineFill#"
   end
 
   s = s .. "%#TabLineFill#"
