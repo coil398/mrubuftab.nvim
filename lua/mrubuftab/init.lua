@@ -100,11 +100,12 @@ function M.render()
     local num_str = to_superscript(i)
 
     -- コンテンツ幅の計算 (スペースやアイコン含む)
-    -- "▎ " or "  " (2) + num (var) + " " (1) + icon (var) + " " (1) = base
+    -- "  " (2) + num (var) + " " (1) + icon (var) + " " (1) = base
     local prefix_width = 2 + vim.fn.strdisplaywidth(num_str) + 1 + (icon_char ~= "" and 2 or 0)
     
     local diag_str = get_diagnostics(bufnr)
     local current_diag_width = vim.fn.strdisplaywidth(diag_str:gsub("%%#.-#", ""))
+
     local close_width = 3 -- "✕  "
     local modified_width = (modified ~= "" and 2 or 0)
 
@@ -156,7 +157,7 @@ function M.render()
     -- リストに追加
     table.insert(tabs, {
       str = s,
-      width = target_width -- パディングで埋めているのでtarget_widthが実際の幅になるはず（ただし計算違いで多少ずれる可能性はあるが一旦これで）
+      width = target_width
     })
     total_req_width = total_req_width + target_width
   end
@@ -222,6 +223,7 @@ function M.render()
 
   return final_s .. "%#TabLineFill#"
 end
+
 function M.jump(count)
   local target_idx = (count and count > 0) and count or 2
   local target_buf = M.mru_list[target_idx]
