@@ -46,6 +46,25 @@ function M.jump(count)
   end
 end
 
+function M.next(count)
+  -- カウントが指定されていればその番号へ、なければ2番目（直前のバッファ）へ
+  local target = (count and count > 0) and count or 2
+  M.jump(target)
+end
+
+function M.prev(count)
+  -- カウントが指定されていれば「後ろからN番目」、なければ「一番最後」
+  local c = (count and count > 0) and count or 1
+  local target_idx = #M.mru_list - (c - 1)
+  
+  if target_idx < 1 then target_idx = 1 end
+
+  local target_buf = M.mru_list[target_idx]
+  if target_buf and vim.api.nvim_buf_is_valid(target_buf) then
+    vim.api.nvim_set_current_buf(target_buf)
+  end
+end
+
 function M.setup(opts)
   vim.api.nvim_create_autocmd({ "BufEnter", "BufWinEnter" }, {
     group = vim.api.nvim_create_augroup("MruTabline", { clear = true }),
@@ -67,6 +86,14 @@ function M.setup(opts)
   })
 
   vim.opt.tabline = "%!v:lua.require(\"mrubuftab\").render()"
+
+  vim.api.nvim_create_user_command("MruNext", function(opts)
+    require("mrubuftab").next(opts.count > 0 and opts.count or nil)
+  end, { count = true })
+
+  vim.api.nvim_create_user_command("MruPrev", function(opts)
+    require("mrubuftab").prev(opts.count > 0 and opts.count or nil)
+  end, { count = true })
 end
 
 return M
