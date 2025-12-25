@@ -11,7 +11,7 @@ _G.MruBufTab_close_buffer = function(bufnr)
   end
 end
 
--- 1. アイコンと色情報(ハイライトグループ)を返す関数
+-- アイコンと色情報(ハイライトグループ)を返す関数
 local get_icon_data = function(_, _) return "", "" end
 
 -- プラグインがあるか一度だけチェック
@@ -61,7 +61,7 @@ function M.render()
   local columns = vim.o.columns
   local cur = vim.api.nvim_get_current_buf()
 
-  -- 1. 有効なバッファリストの作成と更新
+  -- 有効なバッファリストの作成と更新
   local valid_mru = {}
   for _, bufnr in ipairs(M.mru_list) do
     if vim.api.nvim_buf_is_valid(bufnr) and vim.bo[bufnr].buflisted then
@@ -70,15 +70,13 @@ function M.render()
   end
   M.mru_list = valid_mru
 
-  -- 2. 各タブの描画内容と幅を計算してリスト化
+  -- 各タブの描画内容と幅を計算してリスト化
   local tabs = {}
   local total_req_width = 0
   local current_idx = 1
 
-  -- --- 設定値 ---
   local TAB_BASE_WIDTH = 25 -- 基本幅
   local TAB_MAX_WIDTH = 40  -- 最大幅
-  -- --------------
 
   for i, bufnr in ipairs(M.mru_list) do
     if bufnr == cur then current_idx = i end
@@ -91,7 +89,7 @@ function M.render()
     -- アイコン・未保存マーク
     local icon_char, icon_hl = get_icon_data(name, ext)
     local modified = vim.bo[bufnr].modified and " ●" or ""
-    
+
     -- ハイライト
     local hl_group = (bufnr == cur) and "%#TabLineSel#" or "%#TabLine#"
     local name_hl = (bufnr == cur) and "%#TabLineSelItalic#" or hl_group
@@ -100,9 +98,8 @@ function M.render()
     local num_str = to_superscript(i)
 
     -- コンテンツ幅の計算 (スペースやアイコン含む)
-    -- "  " (2) + num (var) + " " (1) + icon (var) + " " (1) = base
     local prefix_width = 2 + vim.fn.strdisplaywidth(num_str) + 1 + (icon_char ~= "" and 2 or 0)
-    
+
     local diag_str = get_diagnostics(bufnr)
     local current_diag_width = vim.fn.strdisplaywidth(diag_str:gsub("%%#.-#", ""))
 
@@ -111,8 +108,9 @@ function M.render()
 
     -- 目標幅の決定
     local target_width = TAB_BASE_WIDTH
-    if current_diag_width > 0 then
-      target_width = math.min(TAB_BASE_WIDTH + current_diag_width, TAB_MAX_WIDTH)
+    local extra_width = current_diag_width
+    if extra_width > 0 then
+      target_width = math.min(TAB_BASE_WIDTH + extra_width, TAB_MAX_WIDTH)
     end
 
     -- ファイル名表示幅
@@ -123,6 +121,8 @@ function M.render()
     if vim.fn.strdisplaywidth(name) > available_name_width then
       display_name = vim.fn.strcharpart(name, 0, available_name_width - 1) .. "…"
     end
+
+    -- 実際に表示するファイル名の幅
     local actual_name_width = vim.fn.strdisplaywidth(display_name)
 
     -- パディング計算
@@ -138,7 +138,7 @@ function M.render()
     -- 文字列構築
     local s = ""
     s = s .. hl_group
-    s = s .. "  " -- 装飾文字 ▎ を削除し、スペースに変更
+    s = s .. "  " -- 装飾なし
     s = s .. num_str .. " "
 
     if icon_char ~= "" then
@@ -162,63 +162,49 @@ function M.render()
     total_req_width = total_req_width + target_width
   end
 
-  -- 3. 表示範囲の計算
-  -- 安全マージンを含めて少し広めに取る
-  local INDICATOR_WIDTH = 6 -- "  " or "  " + margin
+  -- 表示範囲の計算
+  local INDICATOR_WIDTH = 6
   local available_width = columns - (INDICATOR_WIDTH * 2)
 
   local left, right
   local is_scroll_needed = false
 
   if (total_req_width + (INDICATOR_WIDTH * 2)) <= columns then
-    -- 全て収まる場合
     left = 1
     right = #tabs
     is_scroll_needed = false
   else
-    -- 収まらない場合: スクロール計算
     is_scroll_needed = true
     left = current_idx
     right = current_idx
     local current_len = tabs[current_idx].width
 
-    -- 中心から広げていく (available_widthに収まるように)
     while true do
       local changed = false
-      -- 左へ
       if left > 1 and (current_len + tabs[left-1].width) <= available_width then
         left = left - 1
         current_len = current_len + tabs[left].width
         changed = true
       end
-      -- 右へ
       if right < #tabs and (current_len + tabs[right+1].width) <= available_width then
         right = right + 1
         current_len = current_len + tabs[right].width
         changed = true
       end
-      
       if not changed then break end
       if current_len >= available_width then break end
     end
   end
 
-  -- 4. 結合
+  -- 結合
   local final_s = ""
-  
-  -- 左インジケータ (常に表示)
   final_s = final_s .. "%#TabLine#  "
-
   for i = left, right do
     final_s = final_s .. tabs[i].str
   end
-
-  -- 余白を埋める (スクロールが必要な場合のみ右端固定)
   if is_scroll_needed then
     final_s = final_s .. "%="
   end
-
-  -- 右インジケータ (常に表示)
   final_s = final_s .. "%#TabLine#  "
 
   return final_s .. "%#TabLineFill#"
@@ -233,18 +219,14 @@ function M.jump(count)
 end
 
 function M.next(count)
-  -- カウントが指定されていればその番号へ、なければ2番目（直前のバッファ）へ
   local target = (count and count > 0) and count or 2
   M.jump(target)
 end
 
 function M.prev(count)
-  -- カウントが指定されていれば「後ろからN番目」、なければ「一番最後」
   local c = (count and count > 0) and count or 1
   local target_idx = #M.mru_list - (c - 1)
-
   if target_idx < 1 then target_idx = 1 end
-
   local target_buf = M.mru_list[target_idx]
   if target_buf and vim.api.nvim_buf_is_valid(target_buf) then
     vim.api.nvim_set_current_buf(target_buf)
@@ -255,22 +237,15 @@ function M.setup(opts)
   -- ハイライトを設定する関数
   local function set_highlights()
     local function create_italic_hl(target, source)
-      -- 既存の色情報を取得 (リンク先も解決する)
       local hl = vim.api.nvim_get_hl(0, { name = source, link = false })
-      -- 斜体を追加
       hl.italic = true
-      -- 新しいグループとして定義
       vim.api.nvim_set_hl(0, target, hl)
     end
-
     create_italic_hl("TabLineSelItalic", "TabLineSel")
     create_italic_hl("TabLineItalic", "TabLine")
   end
 
-  -- 初回実行
   set_highlights()
-
-  -- カラースキームが変更されたら再設定する (色がリセットされるのを防ぐ)
   vim.api.nvim_create_autocmd("ColorScheme", {
     callback = set_highlights,
   })
