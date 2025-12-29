@@ -219,12 +219,20 @@ function M.jump(count)
 end
 
 function M.next(count)
-  local target = (count and count > 0) and count or 2
+  local c = count
+  if not c or c == 0 then
+    c = vim.v.count
+  end
+  local target = (c and c > 0) and c or 2
   M.jump(target)
 end
 
 function M.prev(count)
-  local c = (count and count > 0) and count or 1
+  local c = count
+  if not c or c == 0 then
+    c = vim.v.count
+  end
+  c = (c and c > 0) and c or 1
   local target_idx = #M.mru_list - (c - 1)
   if target_idx < 1 then target_idx = 1 end
   local target_buf = M.mru_list[target_idx]
