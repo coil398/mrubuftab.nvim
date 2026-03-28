@@ -3,6 +3,13 @@ local M = {}
 M.mru_list = {}
 
 -- グローバル関数として登録しないとタブラインから呼べない (v:lua.Func)
+_G.MruBufTab_switch_buffer = function(bufnr)
+  local b = tonumber(bufnr)
+  if b and vim.api.nvim_buf_is_valid(b) then
+    vim.api.nvim_set_current_buf(b)
+  end
+end
+
 _G.MruBufTab_close_buffer = function(bufnr)
   -- 数値に変換 (タブラインからは文字列で来る場合があるため)
   local b = tonumber(bufnr)
@@ -137,6 +144,7 @@ function M.render()
 
     -- 文字列構築
     local s = ""
+    s = s .. "%" .. bufnr .. "@v:lua.MruBufTab_switch_buffer@"
     s = s .. hl_group
     s = s .. "  " -- 装飾なし
     s = s .. num_str .. " "
@@ -152,6 +160,7 @@ function M.render()
     s = s .. name_hl .. padding_left .. display_name .. hl_group .. modified .. padding_right .. " "
     if diag_str ~= "" then s = s .. diag_str .. " " end
     s = s .. "%" .. bufnr .. "@v:lua.MruBufTab_close_buffer@✕%X  "
+    s = s .. "%X" -- switch_buffer のクリック領域を閉じる
     s = s .. "%#TabLineFill#"
 
     -- リストに追加
